@@ -6,12 +6,16 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .tp-btn{position:absolute;top:8px;left:8px;z-index:5;width:26px;height:26px;
-      border-radius:13px;border:2px solid #fff;padding:0;background:#1d9bf0;
-      color:#fff;font:bold 18px/22px sans-serif;text-align:center;
-      box-shadow:0 1px 3px rgba(0,0,0,.4)}
-    .tp-sel{outline:3px solid #1d9bf0 !important;outline-offset:-3px}
-    .tp-sel .tp-btn{background:#f4212e}
+    .tp-btn{position:absolute;right:10px;bottom:10px;z-index:5;width:30px;height:30px;
+      border-radius:15px;border:none;padding:0;background:#f4212e;
+      color:#fff;font:bold 20px/30px sans-serif;text-align:center;
+      box-shadow:0 1px 3px rgba(0,0,0,.35);animation:tp-pulse 2.8s ease-out infinite}
+    @keyframes tp-pulse{
+      0%{box-shadow:0 1px 3px rgba(0,0,0,.35),0 0 0 0 rgba(244,33,46,.45)}
+      45%,100%{box-shadow:0 1px 3px rgba(0,0,0,.35),0 0 0 10px rgba(244,33,46,0)}}
+    @media (prefers-reduced-motion:reduce){.tp-btn{animation:none}}
+    .tp-sel{outline:3px solid #f4212e !important;outline-offset:-3px}
+    .tp-sel .tp-btn{animation:none;transform:scale(1.08)}
     html.tp-cap .tp-btn{display:none !important}
     html.tp-cap .tp-sel{outline:none !important}
     .tp-hide{visibility:hidden !important}`;
@@ -29,14 +33,42 @@
     return [...document.querySelectorAll(ARTICLE)].filter(a => sel.has(urlOf(a)));
   }
 
+  // X draws a reply chain as a thin vertical line under the upper tweet's avatar.
+  function connectsDown(a) {
+    const av = a.querySelector('[data-testid="Tweet-User-Avatar"]');
+    if (!av) return false;
+    const r = av.getBoundingClientRect();
+    return [...a.querySelectorAll('div')].some(d => {
+      const q = d.getBoundingClientRect();
+      return q.width > 0 && q.width <= 4 && q.height > 8 &&
+        q.top >= r.bottom - 2 && q.left >= r.left && q.right <= r.right;
+    });
+  }
+
+  // One link per conversation: the last selected tweet of each reply chain.
+  function chainLinks(arts) {
+    if (/\/status\/\d+/.test(location.pathname)) return [urlOf(arts[arts.length - 1])];
+    const all = [...document.querySelectorAll(ARTICLE)];
+    const links = [];
+    arts.forEach((a, i) => {
+      if (i > 0) {
+        const from = all.indexOf(arts[i - 1]), to = all.indexOf(a);
+        if (all.slice(from, to).every(connectsDown)) links.pop();
+      }
+      links.push(urlOf(a));
+    });
+    return links;
+  }
+
   function swallow(e) { e.stopPropagation(); }
 
   function scan() {
     document.querySelectorAll(ARTICLE).forEach(a => {
       const u = urlOf(a);
-      a.classList.toggle('tp-sel', !!u && sel.has(u));
+      const on = !!u && sel.has(u);
+      a.classList.toggle('tp-sel', on);
       const old = a.querySelector(':scope > .tp-btn');
-      if (old) return place(a, old);
+      if (old) { old.textContent = on ? '✓' : '+'; return; }
       if (getComputedStyle(a).position === 'static') a.style.position = 'relative';
       const b = document.createElement('button');
       b.className = 'tp-btn';
@@ -53,18 +85,7 @@
         Android.onSelection(sel.size);
       });
       a.appendChild(b);
-      place(a, b);
     });
-  }
-
-  // Badge on the avatar's lower-right corner: the one spot never under text or buttons.
-  function place(a, b) {
-    const av = a.querySelector('[data-testid="Tweet-User-Avatar"]');
-    if (!av) return;
-    const ar = a.getBoundingClientRect(), r = av.getBoundingClientRect();
-    if (!r.width) return;
-    b.style.left = (r.right - ar.left - 18) + 'px';
-    b.style.top = (r.bottom - ar.top - 18) + 'px';
   }
 
   function restore() {
@@ -92,7 +113,7 @@
     });
     Android.onRect(JSON.stringify({
       x: l + scrollX, y: t + scrollY, w: r - l, h: b - t,
-      dpr: devicePixelRatio, urls: arts.map(urlOf),
+      dpr: devicePixelRatio, urls: chainLinks(arts),
       bg: getComputedStyle(document.body).backgroundColor
     }));
   }

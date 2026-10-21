@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
@@ -18,6 +19,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.view.Gravity
+import android.view.Menu
 import android.view.View
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -48,13 +50,21 @@ class MainActivity : Activity() {
     private lateinit var captureBtn: Button
     private lateinit var findNextBtn: Button
     private lateinit var script: String
+    private var nightMode = 0
     private val prefs by lazy { getSharedPreferences("tweetpick", MODE_PRIVATE) }
 
     private val pickMode
         get() = intent?.action == Intent.ACTION_GET_CONTENT || intent?.action == Intent.ACTION_PICK
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // x.com's "use device settings" mode reads prefers-color-scheme, which
+        // WebView takes from this theme's light/dark flag.
+        when (prefs.getString("theme", "system")) {
+            "light" -> setTheme(R.style.Theme_TweetPick_Light)
+            "dark" -> setTheme(R.style.Theme_TweetPick_Dark)
+        }
         super.onCreate(savedInstanceState)
+        nightMode = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
         script = assets.open("tp.js").bufferedReader().use { it.readText() }
 
         web = WebView(this).apply {
@@ -219,6 +229,18 @@ class MainActivity : Activity() {
             menu.add("Clear selection").setOnMenuItemClickListener {
                 web.evaluateJavascript("window.__tp&&__tp.clearSel()", null); true
             }
+            val current = prefs.getString("theme", "system")
+            menu.addSubMenu("Theme").apply {
+                for ((key, label) in listOf("system" to "System", "light" to "Light", "dark" to "Dark")) {
+                    add(1, Menu.NONE, Menu.NONE, label).setChecked(key == current)
+                        .setOnMenuItemClickListener {
+                            prefs.edit().putString("theme", key).apply()
+                            recreate()
+                            true
+                        }
+                }
+                setGroupCheckable(1, true, true)
+            }
             menu.add("Home").setOnMenuItemClickListener { web.loadUrl("https://x.com/home"); true }
             menu.add("Reload").setOnMenuItemClickListener { web.reload(); true }
             show()
@@ -353,6 +375,13 @@ class MainActivity : Activity() {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         web.saveState(outState)
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val night = newConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK
+        if (night != nightMode && prefs.getString("theme", "system") == "system") recreate()
+        nightMode = night
     }
 
     override fun onPause() {

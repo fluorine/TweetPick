@@ -4,4 +4,14 @@
         <item name="android:colorAccent">#1D9BF0</item>
         <item name="android:windowBackground">#FFFFFF</item>
     </style>
+
+    <style name="Theme.TweetPick.Light" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#1D9BF0</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+    </style>
+
+    <style name="Theme.TweetPick.Dark" parent="android:Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#1D9BF0</item>
+        <item name="android:windowBackground">#000000</item>
+    </style>
 </resources>

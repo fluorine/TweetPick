@@ -19,6 +19,7 @@ object Captures {
     // Must match the provider's android:authorities in the manifest.
     const val AUTHORITY = "dev.tweetpick.documents"
     const val ROOT_DOC = "root"
+    private const val CREDIT = "github.com/fluorine/tweetpick"
 
     // Most 4chan boards reject files above 4 MiB.
     private const val MAX_BYTES = 4 * 1024 * 1024 - 64 * 1024
@@ -36,9 +37,14 @@ object Captures {
             textSize = 13 * density
             typeface = Typeface.SANS_SERIF
         }
+        val credit = TextPaint(paint).apply {
+            textSize = 11 * density
+            alpha = 170
+            textAlign = Paint.Align.RIGHT
+        }
         val lines = urls.take(4)
         val lineH = paint.textSize * 1.4f
-        val footerH = (pad * 2 + lineH * lines.size).toInt()
+        val footerH = (pad * 2 + lineH * lines.size + credit.textSize * 1.4f).toInt()
         val out = Bitmap.createBitmap(shot.width, shot.height + footerH, Bitmap.Config.ARGB_8888)
         val c = Canvas(out)
         c.drawColor(bg)
@@ -53,6 +59,7 @@ object Captures {
             c.drawText(text.toString(), pad, y, paint)
             y += lineH
         }
+        c.drawText(CREDIT, out.width - pad, y, credit)
         return out
     }
 

@@ -4,16 +4,37 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Card shadow -->
+    <path
+        android:fillColor="#33000000"
+        android:pathData="M37,36h34a6,6 0,0 1,6 6v26a6,6 0,0 1,-6 6h-34a6,6 0,0 1,-6 -6v-26a6,6 0,0 1,6 -6z" />
+    <!-- Card -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M34,32h40a4,4 0,0 1,4 4v36a4,4 0,0 1,-4 4h-40a4,4 0,0 1,-4 -4v-36a4,4 0,0 1,4 -4z" />
+        android:pathData="M36,34h34a6,6 0,0 1,6 6v26a6,6 0,0 1,-6 6h-34a6,6 0,0 1,-6 -6v-26a6,6 0,0 1,6 -6z" />
+    <!-- Avatar -->
     <path
         android:fillColor="#1D9BF0"
-        android:pathData="M42,44m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
-    <path
-        android:fillColor="#1D9BF0"
-        android:pathData="M51,41h20v3h-20zM51,47h14v3h-14zM37,56h34v3h-34zM37,62h28v3h-28z" />
+        android:pathData="M34,44a5,5 0,1 0,10 0a5,5 0,1 0,-10 0z" />
+    <!-- Name and handle -->
     <path
         android:fillColor="#0F1419"
-        android:pathData="M30,79h48v3h-48z" />
+        android:pathData="M49.5,41h16a1.5,1.5 0,0 1,0 3h-16a1.5,1.5 0,0 1,0 -3z" />
+    <path
+        android:fillColor="#8B98A5"
+        android:pathData="M49,46h10a1,1 0,0 1,0 2h-10a1,1 0,0 1,0 -2z" />
+    <!-- Text lines -->
+    <path
+        android:fillColor="#536471"
+        android:pathData="M37.5,54h31a1.5,1.5 0,0 1,0 3h-31a1.5,1.5 0,0 1,0 -3zM37.5,60h19a1.5,1.5 0,0 1,0 3h-19a1.5,1.5 0,0 1,0 -3z" />
+    <!-- Pick badge -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M61.5,69a10.5,10.5 0,1 0,21 0a10.5,10.5 0,1 0,-21 0z" />
+    <path
+        android:fillColor="#F4212E"
+        android:pathData="M63.5,69a8.5,8.5 0,1 0,17 0a8.5,8.5 0,1 0,-17 0z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M70.75,64h2.5v3.75h3.75v2.5h-3.75v3.75h-2.5v-3.75h-3.75v-2.5h3.75z" />
 </vector>
