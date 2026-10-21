@@ -30,11 +30,11 @@ The alpha builds are debug-signed. Play Protect can show a warning.
 
 ## Features
 
-- **Image picker.** TweetPick answers `GET_CONTENT` and `PICK` requests for `image/*`. It also shows as "TweetPick" in the system file picker, with all saved captures.
+- **Image picker.** TweetPick answers `GET_CONTENT` requests for images or any file (as from 4chan's "Choose File"), and `PICK` requests for images. It also shows as "TweetPick" in the system file picker, with all saved captures.
 - **Native look.** The image is X's own rendering, not a copy of it. Sticky bars and TweetPick's buttons are hidden during capture.
-- **Long tweets and threads.** Capture scrolls down and stitches. The limit is 8000 px of height.
+- **Long tweets and threads.** Capture scrolls down and stitches. The limit is 16000 px of height. Select fewer tweets for a longer thread.
 - **Link footer.** A reply chain gets one link, the one for its last selected reply. Unrelated tweets each get their own link.
-- **Size limit.** The file is PNG. If the PNG is larger than about 4 MB, TweetPick uses JPEG so the file stays below common upload limits.
+- **Saved to your gallery.** Every capture is a full-resolution PNG in `Pictures/TweetPick`. Galleries and file pickers show it. **Discard** deletes it.
 - **Theme.** Select **⋯ → Theme**: System, Light or Dark. Set X's own display setting to "Use device settings" so that X follows it.
 
 ## Build

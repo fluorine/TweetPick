@@ -1,10 +1,12 @@
 package dev.tweetpick
 
+import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -37,7 +39,6 @@ import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
-import android.widget.ScrollView
 import android.widget.Toast
 import androidx.webkit.WebSettingsCompat
 import androidx.webkit.WebViewFeature
@@ -138,6 +139,12 @@ class MainActivity : Activity() {
             insets
         }
         setContentView(root)
+
+        if (Build.VERSION.SDK_INT < 29 &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 1)
+        }
 
         if (savedInstanceState != null) web.restoreState(savedInstanceState)
         else web.loadUrl("https://x.com/i/bookmarks")
@@ -269,12 +276,12 @@ class MainActivity : Activity() {
         val dpr = o.getDouble("dpr").toFloat()
         val left = o.getDouble("x")
         val top = o.getDouble("y")
+        val srcW = (o.getDouble("w") * dpr).roundToInt()
         val fullH = (o.getDouble("h") * dpr).roundToInt()
         val outH = min(fullH, MAX_HEIGHT_PX)
         val bottom = top + outH / dpr
         val out: Bitmap = Bitmap.createBitmap(
-            (o.getDouble("w") * dpr).roundToInt().coerceAtLeast(1), outH.coerceAtLeast(1),
-            Bitmap.Config.ARGB_8888
+            srcW.coerceAtLeast(1), outH.coerceAtLeast(1), Bitmap.Config.ARGB_8888
         )
         val urls = o.getJSONArray("urls").let { a -> List(a.length()) { a.getString(it) } }
         val bg = parseCssColor(o.optString("bg")) ?: Color.WHITE
@@ -307,8 +314,9 @@ class MainActivity : Activity() {
         val loc = IntArray(2).also { web.getLocationInWindow(it) }
         val srcLeft = loc[0] + (s.left * s.dpr).roundToInt()
         val srcTop = loc[1] + ((from - scrollY) * s.dpr).roundToInt()
-        val src = Rect(srcLeft, srcTop, srcLeft + s.out.width, srcTop + dstBottom - dstTop)
-        if (src.height() <= 0) return finishCapture(s)
+        val srcH = ((to - from) * s.dpr).roundToInt()
+        val src = Rect(srcLeft, srcTop, srcLeft + s.srcW, srcTop + srcH)
+        if (srcH <= 0 || dstBottom <= dstTop) return finishCapture(s)
         val part = Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888)
 
         PixelCopy.request(window, src, part, { result ->
@@ -330,17 +338,24 @@ class MainActivity : Activity() {
         web.evaluateJavascript("__tp.done(true)", null)
         if (s.fullH > s.out.height) toast("Selection is very tall. The bottom is cut off.")
         val file = Captures.save(this, Captures.withFooter(s.out, s.urls, s.bg, s.dpr))
-        preview(file)
+        val media = Captures.publish(this, file)
+        if (media == null) toast("Could not save to Pictures/TweetPick.")
+        preview(file, media)
     }
 
-    private fun preview(file: File) {
+    private fun preview(file: File, media: Uri?) {
         val img = ImageView(this).apply {
             adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+            maxHeight = (resources.displayMetrics.heightPixels * 0.6f).toInt()
             setImageBitmap(BitmapFactory.decodeFile(file.path))
         }
         val dialog = AlertDialog.Builder(this)
-            .setView(ScrollView(this).apply { addView(img) })
-            .setNegativeButton("Discard") { _, _ -> file.delete() }
+            .setView(img)
+            .setNegativeButton("Discard") { _, _ ->
+                file.delete()
+                media?.let { Captures.unpublish(this, it) }
+            }
         if (pickMode) {
             dialog.setPositiveButton("Use") { _, _ -> returnToCaller(file) }
                 .setNeutralButton("Keep & pick more", null)
@@ -424,7 +439,7 @@ class MainActivity : Activity() {
     }
 
     private companion object {
-        // Bounds bitmap memory: 1080 x 8000 ARGB is about 35 MB.
-        const val MAX_HEIGHT_PX = 8000
+        // Bounds bitmap memory: 1440 x 16000 ARGB is about 92 MB.
+        const val MAX_HEIGHT_PX = 16000
     }
 }

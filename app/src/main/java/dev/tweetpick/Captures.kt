@@ -1,15 +1,22 @@
 package dev.tweetpick
 
+import android.Manifest
+import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Typeface
+import android.media.MediaScannerConnection
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.text.TextPaint
 import android.text.TextUtils
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -20,9 +27,7 @@ object Captures {
     const val AUTHORITY = "dev.tweetpick.documents"
     const val ROOT_DOC = "root"
     private const val CREDIT = "github.com/fluorine/tweetpick"
-
-    // Most 4chan boards reject files above 4 MiB.
-    private const val MAX_BYTES = 4 * 1024 * 1024 - 64 * 1024
+    private const val ALBUM = "TweetPick"
 
     fun dir(context: Context): File =
         File(context.filesDir, "captures").apply { mkdirs() }
@@ -54,33 +59,78 @@ object Captures {
         }
         c.drawRect(0f, shot.height.toFloat(), out.width.toFloat(), shot.height + density, divider)
         var y = shot.height + pad - paint.ascent()
+        val avail = out.width - 2 * pad
         for (url in lines) {
-            val text = TextUtils.ellipsize(url, paint, out.width - 2 * pad, TextUtils.TruncateAt.END)
-            c.drawText(text.toString(), pad, y, paint)
+            val fit = TextPaint(paint)
+            val w = fit.measureText(url)
+            if (w > avail) fit.textSize = maxOf(fit.textSize * avail / w, 7 * density)
+            val text = TextUtils.ellipsize(url, fit, avail, TextUtils.TruncateAt.END)
+            c.drawText(text.toString(), pad, y, fit)
             y += lineH
         }
         c.drawText(CREDIT, out.width - pad, y, credit)
         return out
     }
 
-    /** Writes PNG, or JPEG at falling quality when the PNG is above [MAX_BYTES]. */
     fun save(context: Context, image: Bitmap): File {
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-        val buf = ByteArrayOutputStream()
-        image.compress(Bitmap.CompressFormat.PNG, 100, buf)
-        var ext = "png"
-        var quality = 95
-        while (buf.size() > MAX_BYTES && quality >= 40) {
-            buf.reset()
-            image.compress(Bitmap.CompressFormat.JPEG, quality, buf)
-            ext = "jpg"
-            quality -= 10
-        }
-        val file = File(dir(context), "tweet_$stamp.$ext")
-        file.writeBytes(buf.toByteArray())
+        val file = File(dir(context), "tweet_$stamp.png")
+        file.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }
         context.contentResolver.notifyChange(
             DocumentsContract.buildChildDocumentsUri(AUTHORITY, ROOT_DOC), null
         )
         return file
+    }
+
+    /**
+     * Copies [file] to Pictures/TweetPick so galleries and pickers list it.
+     * Returns its media URI, or null when it could not be written.
+     */
+    fun publish(context: Context, file: File): Uri? {
+        val mime = if (file.extension == "jpg") "image/jpeg" else "image/png"
+        return try {
+            if (Build.VERSION.SDK_INT >= 29) publishMediaStore(context, file, mime)
+            else publishLegacy(context, file, mime)
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    private fun publishMediaStore(context: Context, file: File, mime: String): Uri? {
+        val resolver = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Images.Media.DISPLAY_NAME, file.name)
+            put(MediaStore.Images.Media.MIME_TYPE, mime)
+            put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/$ALBUM")
+            put(MediaStore.Images.Media.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values) ?: return null
+        resolver.openOutputStream(uri)!!.use { out -> file.inputStream().use { it.copyTo(out) } }
+        values.clear()
+        values.put(MediaStore.Images.Media.IS_PENDING, 0)
+        resolver.update(uri, values, null, null)
+        return uri
+    }
+
+    // Needs WRITE_EXTERNAL_STORAGE, which the activity asks for below API 29.
+    @Suppress("DEPRECATION")
+    private fun publishLegacy(context: Context, file: File, mime: String): Uri? {
+        val granted = context.checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!granted) return null
+        val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), ALBUM)
+        dir.mkdirs()
+        val dest = File(dir, file.name)
+        file.copyTo(dest, overwrite = true)
+        MediaScannerConnection.scanFile(context, arrayOf(dest.path), arrayOf(mime), null)
+        return Uri.fromFile(dest)
+    }
+
+    fun unpublish(context: Context, uri: Uri) {
+        try {
+            if (uri.scheme == "file") File(uri.path!!).delete()
+            else context.contentResolver.delete(uri, null, null)
+        } catch (_: Exception) {
+        }
     }
 }
