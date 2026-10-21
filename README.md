@@ -6,7 +6,7 @@ Android image picker that captures tweets from x.com as images, with the tweet l
 
 - A WebView shows x.com. You sign in on X's own login page (username/password; Google sign-in is blocked inside WebViews).
 - A blue **+** badge shows on each tweet avatar. Tap it to select (it turns red). Select several tweets for a thread.
-- **Capture** draws the selected tweets from the page, hides sticky bars, adds the link footer and saves PNG (JPEG if above ~4 MB).
+- **Capture** scrolls down through the selected tweets, copies each screen and stitches them, hides sticky bars, adds the link footer and saves PNG (JPEG if above ~4 MB).
 - Opened from another app (`GET_CONTENT` / `PICK`, `image/*`): **Use** returns the image to that app.
 - Opened from the launcher: **Share** sends it with the share sheet.
 - The app is also a Documents provider: "TweetPick" shows in the system file picker sidebar with every saved capture.

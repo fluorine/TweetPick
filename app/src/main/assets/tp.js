@@ -84,25 +84,24 @@
       const p = getComputedStyle(el).position;
       if (p === 'fixed' || p === 'sticky') el.classList.add('tp-hide');
     });
-    first.scrollIntoView({ block: 'start' });
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      arts = selected();
-      if (!arts.length) {
-        restore();
-        return Android.onCaptureError('The page changed. Try again.');
-      }
-      let t = Infinity, b = -Infinity, l = Infinity, r = -Infinity;
-      arts.forEach(a => {
-        const q = a.getBoundingClientRect();
-        t = Math.min(t, q.top); b = Math.max(b, q.bottom);
-        l = Math.min(l, q.left); r = Math.max(r, q.right);
-      });
-      Android.onRect(JSON.stringify({
-        x: l + scrollX, y: t + scrollY, w: r - l, h: b - t,
-        dpr: devicePixelRatio, urls: arts.map(urlOf),
-        bg: getComputedStyle(document.body).backgroundColor
-      }));
+    let t = Infinity, b = -Infinity, l = Infinity, r = -Infinity;
+    arts.forEach(a => {
+      const q = a.getBoundingClientRect();
+      t = Math.min(t, q.top); b = Math.max(b, q.bottom);
+      l = Math.min(l, q.left); r = Math.max(r, q.right);
+    });
+    Android.onRect(JSON.stringify({
+      x: l + scrollX, y: t + scrollY, w: r - l, h: b - t,
+      dpr: devicePixelRatio, urls: arts.map(urlOf),
+      bg: getComputedStyle(document.body).backgroundColor
     }));
+  }
+
+  // Reports the real scroll position, which the page clamps at its bottom.
+  function scrollToY(y) {
+    window.scrollTo(0, y);
+    requestAnimationFrame(() => requestAnimationFrame(() =>
+      Android.onScrolled(window.scrollY, window.innerHeight)));
   }
 
   function done(clear) {
@@ -126,7 +125,7 @@
     queued = true;
     requestAnimationFrame(() => { queued = false; scan(); });
   }).observe(document.documentElement, { childList: true, subtree: true });
-  window.__tp = { scan, prepare, done, clearSel, handle };
+  window.__tp = { scan, prepare, scrollToY, done, clearSel, handle };
   scan();
   Android.onSelection(sel.size);
 })();

@@ -9,7 +9,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.graphics.drawable.GradientDrawable
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -50,8 +54,6 @@ class MainActivity : Activity() {
         get() = intent?.action == Intent.ACTION_GET_CONTENT || intent?.action == Intent.ACTION_PICK
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        // Must run before any WebView exists, or off-screen parts draw blank.
-        WebView.enableSlowWholeDocumentDraw()
         super.onCreate(savedInstanceState)
         script = assets.open("tp.js").bufferedReader().use { it.readText() }
 
@@ -231,45 +233,73 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun capture(o: JSONObject) {
+    /** One capture in progress. Rect values are page coordinates in CSS px. */
+    private inner class Stitch(o: JSONObject) {
         val dpr = o.getDouble("dpr").toFloat()
-        val x = (o.getDouble("x") * dpr).toFloat()
-        val y = (o.getDouble("y") * dpr).toFloat()
-        val w = (o.getDouble("w") * dpr).roundToInt()
+        val left = o.getDouble("x")
+        val top = o.getDouble("y")
         val fullH = (o.getDouble("h") * dpr).roundToInt()
-        val h = min(fullH, MAX_HEIGHT_PX)
-        if (w <= 0 || h <= 0) {
+        val outH = min(fullH, MAX_HEIGHT_PX)
+        val bottom = top + outH / dpr
+        val out: Bitmap = Bitmap.createBitmap(
+            (o.getDouble("w") * dpr).roundToInt().coerceAtLeast(1), outH.coerceAtLeast(1),
+            Bitmap.Config.ARGB_8888
+        )
+        val urls = o.getJSONArray("urls").let { a -> List(a.length()) { a.getString(it) } }
+        val bg = parseCssColor(o.optString("bg")) ?: Color.WHITE
+        var next = top
+    }
+
+    private var stitch: Stitch? = null
+
+    private fun startCapture(o: JSONObject) {
+        val s = Stitch(o)
+        if (s.out.width <= 1 || s.fullH <= 0) {
             web.evaluateJavascript("__tp.done(false)", null)
             return toast("Nothing to capture.")
         }
+        stitch = s
+        captureBtn.visibility = View.GONE
+        web.isVerticalScrollBarEnabled = false
+        web.evaluateJavascript("__tp.scrollToY(${s.next})", null)
+    }
 
-        var shot = draw(w, h, x, y)
-        // Fallback in case this WebView build draws in view coordinates.
-        if (isBlank(shot)) shot = draw(w, h, x - web.scrollX, y - web.scrollY)
+    // The page has scrolled. Copies the visible part of the selection from the screen.
+    private fun onScrolled(scrollY: Double, viewportH: Double) {
+        val s = stitch ?: return
+        val from = maxOf(s.next, scrollY)
+        val to = minOf(s.bottom, scrollY + viewportH)
+        if (to - from < 1) return finishCapture(s)
+
+        val dstTop = ((from - s.top) * s.dpr).roundToInt()
+        val dstBottom = min(((to - s.top) * s.dpr).roundToInt(), s.out.height)
+        val loc = IntArray(2).also { web.getLocationInWindow(it) }
+        val srcLeft = loc[0] + (s.left * s.dpr).roundToInt()
+        val srcTop = loc[1] + ((from - scrollY) * s.dpr).roundToInt()
+        val src = Rect(srcLeft, srcTop, srcLeft + s.out.width, srcTop + dstBottom - dstTop)
+        if (src.height() <= 0) return finishCapture(s)
+        val part = Bitmap.createBitmap(src.width(), src.height(), Bitmap.Config.ARGB_8888)
+
+        PixelCopy.request(window, src, part, { result ->
+            if (result != PixelCopy.SUCCESS) {
+                toast("Screen copy failed ($result).")
+                return@request finishCapture(s)
+            }
+            Canvas(s.out).drawBitmap(part, 0f, dstTop.toFloat(), null)
+            part.recycle()
+            s.next = to
+            if (s.next >= s.bottom - 0.5) finishCapture(s)
+            else web.evaluateJavascript("__tp.scrollToY(${s.next})", null)
+        }, Handler(Looper.getMainLooper()))
+    }
+
+    private fun finishCapture(s: Stitch) {
+        stitch = null
+        web.isVerticalScrollBarEnabled = true
         web.evaluateJavascript("__tp.done(true)", null)
-        if (fullH > h) toast("Selection is very tall. The bottom is cut off.")
-
-        val urls = o.getJSONArray("urls").let { a -> List(a.length()) { a.getString(it) } }
-        val bg = parseCssColor(o.optString("bg")) ?: Color.WHITE
-        val file = Captures.save(this, Captures.withFooter(shot, urls, bg, dpr))
+        if (s.fullH > s.out.height) toast("Selection is very tall. The bottom is cut off.")
+        val file = Captures.save(this, Captures.withFooter(s.out, s.urls, s.bg, s.dpr))
         preview(file)
-    }
-
-    private fun draw(w: Int, h: Int, x: Float, y: Float): Bitmap {
-        val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
-        Canvas(bmp).apply {
-            translate(-x, -y)
-            web.draw(this)
-        }
-        return bmp
-    }
-
-    private fun isBlank(b: Bitmap): Boolean {
-        val first = b.getPixel(0, 0)
-        for (i in 1..8) for (j in 1..8) {
-            if (b.getPixel(b.width * i / 9, b.height * j / 9) != first) return false
-        }
-        return true
     }
 
     private fun preview(file: File) {
@@ -346,8 +376,12 @@ class MainActivity : Activity() {
         fun onCaptureError(msg: String) = runOnUiThread { toast(msg) }
 
         @JavascriptInterface
-        fun onRect(json: String) = runOnUiThread {
-            web.postDelayed({ capture(JSONObject(json)) }, 150)
+        fun onRect(json: String) = runOnUiThread { startCapture(JSONObject(json)) }
+
+        // The delay lets lazy images that scrolled in finish painting.
+        @JavascriptInterface
+        fun onScrolled(scrollY: Double, viewportH: Double) = runOnUiThread {
+            web.postDelayed({ this@MainActivity.onScrolled(scrollY, viewportH) }, 250)
         }
     }
 
