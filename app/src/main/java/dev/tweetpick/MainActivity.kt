@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -25,6 +26,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -75,10 +77,31 @@ class MainActivity : Activity() {
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
 
+        val dp = resources.displayMetrics.density
+        captureBtn = Button(this).apply {
+            isAllCaps = false
+            visibility = View.GONE
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(0xFF1D9BF0.toInt())
+                cornerRadius = 24 * dp
+            }
+            elevation = 6 * dp
+            setPadding((20 * dp).toInt(), 0, (20 * dp).toInt(), 0)
+            setOnClickListener { web.evaluateJavascript("window.__tp&&__tp.prepare()", null) }
+        }
+        val content = FrameLayout(this).apply {
+            addView(web, FrameLayout.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+            // Sits above x.com's bottom tab bar and left of its compose button.
+            addView(captureBtn, FrameLayout.LayoutParams(WRAP_CONTENT, (48 * dp).toInt()).apply {
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+                bottomMargin = (72 * dp).toInt()
+            })
+        }
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(toolbar(), LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
-            addView(web, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
+            addView(content, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f))
         }
         root.setOnApplyWindowInsetsListener { v, insets ->
             if (Build.VERSION.SDK_INT >= 30) {
@@ -117,7 +140,6 @@ class MainActivity : Activity() {
             visibility = View.GONE
             setOnLongClickListener { web.clearMatches(); visibility = View.GONE; true }
         }
-        captureBtn = btn("Capture (0)") { web.evaluateJavascript("window.__tp&&__tp.prepare()", null) }
         btn("⋯") { menu(it) }
         return HorizontalScrollView(this).apply {
             isHorizontalScrollBarEnabled = false
@@ -315,7 +337,10 @@ class MainActivity : Activity() {
 
     inner class Bridge {
         @JavascriptInterface
-        fun onSelection(count: Int) = runOnUiThread { captureBtn.text = "Capture ($count)" }
+        fun onSelection(count: Int) = runOnUiThread {
+            captureBtn.text = if (count == 1) "Capture 1 tweet" else "Capture $count tweets"
+            captureBtn.visibility = if (count > 0) View.VISIBLE else View.GONE
+        }
 
         @JavascriptInterface
         fun onCaptureError(msg: String) = runOnUiThread { toast(msg) }

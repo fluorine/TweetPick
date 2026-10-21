@@ -6,9 +6,10 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .tp-btn{position:absolute;top:8px;right:48px;z-index:5;width:30px;height:30px;
-      border-radius:15px;border:none;padding:0;background:rgba(29,155,240,.9);
-      color:#fff;font:bold 20px/30px sans-serif;text-align:center}
+    .tp-btn{position:absolute;top:8px;left:8px;z-index:5;width:26px;height:26px;
+      border-radius:13px;border:2px solid #fff;padding:0;background:#1d9bf0;
+      color:#fff;font:bold 18px/22px sans-serif;text-align:center;
+      box-shadow:0 1px 3px rgba(0,0,0,.4)}
     .tp-sel{outline:3px solid #1d9bf0 !important;outline-offset:-3px}
     .tp-sel .tp-btn{background:#f4212e}
     html.tp-cap .tp-btn{display:none !important}
@@ -34,7 +35,8 @@
     document.querySelectorAll(ARTICLE).forEach(a => {
       const u = urlOf(a);
       a.classList.toggle('tp-sel', !!u && sel.has(u));
-      if (a.querySelector(':scope > .tp-btn')) return;
+      const old = a.querySelector(':scope > .tp-btn');
+      if (old) return place(a, old);
       if (getComputedStyle(a).position === 'static') a.style.position = 'relative';
       const b = document.createElement('button');
       b.className = 'tp-btn';
@@ -51,7 +53,18 @@
         Android.onSelection(sel.size);
       });
       a.appendChild(b);
+      place(a, b);
     });
+  }
+
+  // Badge on the avatar's lower-right corner: the one spot never under text or buttons.
+  function place(a, b) {
+    const av = a.querySelector('[data-testid="Tweet-User-Avatar"]');
+    if (!av) return;
+    const ar = a.getBoundingClientRect(), r = av.getBoundingClientRect();
+    if (!r.width) return;
+    b.style.left = (r.right - ar.left - 18) + 'px';
+    b.style.top = (r.bottom - ar.top - 18) + 'px';
   }
 
   function restore() {
