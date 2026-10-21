@@ -39,6 +39,8 @@ import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ScrollView
 import android.widget.Toast
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import org.json.JSONObject
 import java.io.File
 import kotlin.math.min
@@ -71,6 +73,13 @@ class MainActivity : Activity() {
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = true
+            // X's login risk check rejects clients it sees as embedded WebViews.
+            settings.userAgentString = settings.userAgentString
+                .replace("; wv", "")
+                .replace(Regex("""Version/[\d.]+ """), "")
+            if (WebViewFeature.isFeatureSupported(WebViewFeature.REQUESTED_WITH_HEADER_ALLOW_LIST)) {
+                WebSettingsCompat.setRequestedWithHeaderOriginAllowList(settings, emptySet())
+            }
             addJavascriptInterface(Bridge(), "Android")
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
